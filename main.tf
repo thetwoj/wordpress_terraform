@@ -17,8 +17,24 @@ provider "aws" {
   region  = "us-east-2"
 }
 
+data "aws_ami" "wordpress_ami" {
+  owners      = ["self"]
+  most_recent = true
+  name_regex  = var.wordpress_ami_regex
+
+  filter {
+    name   = "state"
+    values = ["available"]
+  }
+
+  filter {
+    name   = "tag:App"
+    values = ["Wordpress"]
+  }
+}
+
 resource "aws_instance" "wordpress_ec2" {
-  ami                    = "ami-0213cc36435010dd9"
+  ami                    = data.aws_ami.wordpress_ami.id
   instance_type          = var.wordpress_instance_type
   availability_zone      = "us-east-2b"
   vpc_security_group_ids = [aws_security_group.wordpress_sg.id]
@@ -34,11 +50,12 @@ resource "aws_instance" "wordpress_ec2" {
       Use = "Root"
     }
     volume_size = 8
-    volume_type = "gp2"
+    volume_type = "gp3"
   }
 
   tags = {
     App = "Wordpress"
+    Name = "Prod Wordpress"
   }
 }
 
@@ -56,7 +73,7 @@ resource "aws_ebs_volume" "wordpress_db_volume" {
   availability_zone = "us-east-2b"
   encrypted         = true
   size              = 22
-  type              = "gp2"
+  type              = "gp3"
 
   tags = {
     App = "Wordpress"
@@ -243,10 +260,9 @@ resource "aws_cloudwatch_metric_alarm" "wordpress_memory_use" {
   threshold                 = "85"
   datapoints_to_alarm       = 3
   alarm_description         = "Wordpress using more memory than expected"
-  treat_missing_data        = "breaching"
   insufficient_data_actions = []
   dimensions = {
-    "ImageId"      = "ami-0213cc36435010dd9"
+    "ImageId"      = data.aws_ami.wordpress_ami.id
     "InstanceId"   = aws_instance.wordpress_ec2.id
     "InstanceType" = var.wordpress_instance_type
   }
@@ -254,7 +270,7 @@ resource "aws_cloudwatch_metric_alarm" "wordpress_memory_use" {
     aws_sns_topic.wordpress_alarm_topic.arn,
   ]
   tags = {
-    App = "Wordpress"
+    App    = "Wordpress"
     Metric = "Memory"
   }
 }
@@ -272,13 +288,13 @@ resource "aws_cloudwatch_metric_alarm" "wordpress_cpu_util" {
   alarm_description         = "Excessive CPU util on Wordpress instance"
   insufficient_data_actions = []
   dimensions = {
-    "InstanceId"   = aws_instance.wordpress_ec2.id
+    "InstanceId" = aws_instance.wordpress_ec2.id
   }
   alarm_actions = [
     aws_sns_topic.wordpress_alarm_topic.arn,
   ]
   tags = {
-    App = "Wordpress"
+    App    = "Wordpress"
     Metric = "CPU"
   }
 }
