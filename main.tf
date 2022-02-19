@@ -47,7 +47,7 @@ data "template_file" "userdata_script" {
   vars = {
     ebs_device = "/dev/xvdf"
     ebs_path   = "/ebs"
-    efs_id     = "${aws_efs_file_system.wordpress_content.id}"
+    efs_id     = aws_efs_file_system.wordpress_content.id
     efs_path   = "/var/www/html/efs"
   }
 }
@@ -73,15 +73,17 @@ resource "aws_volume_attachment" "wordpress_db_volume_attachment" {
 
 resource "aws_efs_file_system" "wordpress_content" {
   encrypted = true
-  tags = {
-    App = "Wordpress"
-    Use = "Content"
-  }
+
   lifecycle_policy {
     transition_to_ia = "AFTER_30_DAYS"
   }
   lifecycle_policy {
     transition_to_primary_storage_class = "AFTER_1_ACCESS"
+  }
+
+  tags = {
+    App = "Wordpress"
+    Use = "Content"
   }
 }
 
@@ -129,6 +131,10 @@ resource "aws_security_group" "wordpress_sg" {
     cidr_blocks      = ["0.0.0.0/0"]
     ipv6_cidr_blocks = ["::/0"]
   }
+
+  tags = {
+    App = "Wordpress"
+  }
 }
 
 resource "aws_security_group" "wordpress_efs_sg" {
@@ -149,6 +155,10 @@ resource "aws_security_group" "wordpress_efs_sg" {
     protocol         = "-1"
     cidr_blocks      = ["0.0.0.0/0"]
     ipv6_cidr_blocks = ["::/0"]
+  }
+
+  tags = {
+    App = "Wordpress"
   }
 }
 
@@ -204,4 +214,71 @@ resource "aws_iam_role" "wordpress_iam_role" {
 resource "aws_iam_instance_profile" "wordpress_instance_profile" {
   name = "EC2WordpressRole"
   role = aws_iam_role.wordpress_iam_role.name
+  tags = {
+    App = "Wordpress"
+  }
+}
+
+resource "aws_sns_topic" "wordpress_alarm_topic" {
+  name = "Wordpress_Alarms_Topic"
+  tags = {
+    App = "Wordpress"
+  }
+}
+
+resource "aws_sns_topic_subscription" "wordpress_alarm_emails" {
+  topic_arn = aws_sns_topic.wordpress_alarm_topic.arn
+  protocol  = "email"
+  endpoint  = "thetwoj@gmail.com"
+}
+
+resource "aws_cloudwatch_metric_alarm" "wordpress_memory_use" {
+  alarm_name                = "Wordpress excessive memory use"
+  comparison_operator       = "GreaterThanOrEqualToThreshold"
+  evaluation_periods        = "3"
+  metric_name               = "mem_used_percent"
+  namespace                 = "CWAgent"
+  period                    = "300"
+  statistic                 = "Average"
+  threshold                 = "85"
+  datapoints_to_alarm       = 3
+  alarm_description         = "Wordpress using more memory than expected"
+  treat_missing_data        = "breaching"
+  insufficient_data_actions = []
+  dimensions = {
+    "ImageId"      = "ami-0213cc36435010dd9"
+    "InstanceId"   = aws_instance.wordpress_ec2.id
+    "InstanceType" = var.wordpress_instance_type
+  }
+  alarm_actions = [
+    aws_sns_topic.wordpress_alarm_topic.arn,
+  ]
+  tags = {
+    App = "Wordpress"
+    Metric = "Memory"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "wordpress_cpu_util" {
+  alarm_name                = "Wordpress CPU util"
+  comparison_operator       = "GreaterThanOrEqualToThreshold"
+  evaluation_periods        = "3"
+  metric_name               = "CPUUtilization"
+  namespace                 = "AWS/EC2"
+  period                    = "300"
+  statistic                 = "Average"
+  threshold                 = "90"
+  datapoints_to_alarm       = 3
+  alarm_description         = "Excessive CPU util on Wordpress instance"
+  insufficient_data_actions = []
+  dimensions = {
+    "InstanceId"   = aws_instance.wordpress_ec2.id
+  }
+  alarm_actions = [
+    aws_sns_topic.wordpress_alarm_topic.arn,
+  ]
+  tags = {
+    App = "Wordpress"
+    Metric = "CPU"
+  }
 }
