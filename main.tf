@@ -8,6 +8,10 @@ terraform {
       source  = "hashicorp/template"
       version = "~> 2.2.0"
     }
+    archive = {
+      source  = "hashicorp/archive"
+      version = "~> 2.2.0"
+    }
   }
   required_version = ">= 0.14.9"
 }
@@ -54,7 +58,7 @@ resource "aws_instance" "wordpress_ec2" {
   }
 
   tags = {
-    App = "Wordpress"
+    App  = "Wordpress"
     Name = "Prod Wordpress"
   }
 }
@@ -249,6 +253,69 @@ resource "aws_sns_topic_subscription" "wordpress_alarm_emails" {
   endpoint  = "thetwoj@gmail.com"
 }
 
+data "archive_file" "lambda_wordpress_uptime" {
+  type        = "zip"
+  output_path = "/tmp/lambda_wordpress_uptime.zip"
+  source {
+    content  = file("./lambda_wordpress_uptime.py")
+    filename = "lambda_wordpress_uptime.py"
+  }
+}
+
+resource "aws_lambda_function" "wordpress_uptime" {
+  function_name    = "WordpressUptime"
+  description      = "Wordpress Uptime monitor"
+  role             = "arn:aws:iam::259249389453:role/service-role/WordpressUptime-role-wubdzy06"
+  handler          = "lambda_wordpress_uptime.lambda_handler"
+  runtime          = "python3.9"
+  timeout          = 5
+  architectures    = ["arm64"]
+  filename         = data.archive_file.lambda_wordpress_uptime.output_path
+  source_code_hash = data.archive_file.lambda_wordpress_uptime.output_base64sha256
+}
+
+resource "aws_cloudwatch_event_rule" "wordpress_uptime" {
+  name                = "WordpressUptimeRule"
+  description         = "EventBridge Rule for WordpressUptime"
+  schedule_expression = "rate(5 minutes)"
+  tags = {
+    App = "Wordpress"
+  }
+}
+
+resource "aws_cloudwatch_event_target" "wordpress_uptime" {
+  arn  = aws_lambda_function.wordpress_uptime.arn
+  rule = aws_cloudwatch_event_rule.wordpress_uptime.id
+}
+
+resource "aws_cloudwatch_metric_alarm" "wordpress_uptime" {
+  alarm_name                = "Wordpress uptime"
+  comparison_operator       = "GreaterThanThreshold"
+  evaluation_periods        = "3"
+  metric_name               = "Errors"
+  namespace                 = "AWS/Lambda"
+  period                    = "300"
+  statistic                 = "Maximum"
+  threshold                 = "0"
+  datapoints_to_alarm       = 2
+  alarm_description         = "Wordpress is down"
+  insufficient_data_actions = []
+  treat_missing_data        = "breaching"
+  dimensions = {
+    "FunctionName" = aws_lambda_function.wordpress_uptime.function_name
+  }
+  alarm_actions = [
+    aws_sns_topic.wordpress_alarm_topic.arn,
+  ]
+  ok_actions = [
+    aws_sns_topic.wordpress_alarm_topic.arn,
+  ]
+  tags = {
+    App    = "Wordpress"
+    Metric = "Uptime"
+  }
+}
+
 resource "aws_cloudwatch_metric_alarm" "wordpress_memory_use" {
   alarm_name                = "Wordpress excessive memory use"
   comparison_operator       = "GreaterThanOrEqualToThreshold"
@@ -267,6 +334,9 @@ resource "aws_cloudwatch_metric_alarm" "wordpress_memory_use" {
     "InstanceType" = var.wordpress_instance_type
   }
   alarm_actions = [
+    aws_sns_topic.wordpress_alarm_topic.arn,
+  ]
+  ok_actions = [
     aws_sns_topic.wordpress_alarm_topic.arn,
   ]
   tags = {
@@ -291,6 +361,9 @@ resource "aws_cloudwatch_metric_alarm" "wordpress_cpu_util" {
     "InstanceId" = aws_instance.wordpress_ec2.id
   }
   alarm_actions = [
+    aws_sns_topic.wordpress_alarm_topic.arn,
+  ]
+  ok_actions = [
     aws_sns_topic.wordpress_alarm_topic.arn,
   ]
   tags = {
