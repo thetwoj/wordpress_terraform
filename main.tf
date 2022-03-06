@@ -240,6 +240,57 @@ resource "aws_iam_instance_profile" "wordpress_instance_profile" {
   }
 }
 
+resource "aws_iam_role" "wordpress_uptime_monitor_iam_role" {
+  name        = "WordpressUptimeLambdaRole"
+  description = "Allows lambda to create logs."
+  path        = "/service-role/"
+
+  # Terraform's "jsonencode" function converts a
+  # Terraform expression result to valid JSON syntax.
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        },
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+
+  tags = {
+    App = "Wordpress"
+  }
+}
+
+resource "aws_iam_policy" "lambda_logging" {
+  name        = "lambda_logging"
+  path        = "/"
+  description = "IAM policy for logging from a lambda"
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ],
+        Resource = "arn:aws:logs:*:*:*",
+        Effect   = "Allow"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "lambda_logs" {
+  role       = aws_iam_role.wordpress_uptime_monitor_iam_role.name
+  policy_arn = aws_iam_policy.lambda_logging.arn
+}
+
 resource "aws_sns_topic" "wordpress_alarm_topic" {
   name = "Wordpress_Alarms_Topic"
   tags = {
@@ -265,13 +316,14 @@ data "archive_file" "lambda_wordpress_uptime" {
 resource "aws_lambda_function" "wordpress_uptime" {
   function_name    = "WordpressUptime"
   description      = "Wordpress Uptime monitor"
-  role             = "arn:aws:iam::259249389453:role/service-role/WordpressUptime-role-wubdzy06"
+  role             = aws_iam_role.wordpress_uptime_monitor_iam_role.arn
   handler          = "lambda_wordpress_uptime.lambda_handler"
   runtime          = "python3.9"
   timeout          = 5
   architectures    = ["arm64"]
   filename         = data.archive_file.lambda_wordpress_uptime.output_path
   source_code_hash = data.archive_file.lambda_wordpress_uptime.output_base64sha256
+  depends_on = [aws_iam_role_policy_attachment.lambda_logs]
 }
 
 resource "aws_cloudwatch_event_rule" "wordpress_uptime" {
