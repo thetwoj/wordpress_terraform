@@ -14,11 +14,31 @@ terraform {
     }
   }
   required_version = ">= 0.14.9"
+
+  backend "s3" {
+    profile = "personal"
+    bucket  = "thetwoj-tfstate"
+    key     = "state"
+    region  = "us-east-2"
+  }
 }
 
 provider "aws" {
   profile = "personal"
   region  = "us-east-2"
+}
+
+resource "aws_s3_bucket" "terraform_state" {
+  bucket = "thetwoj-tfstate"
+  acl    = "private"
+
+  versioning {
+    enabled = true
+  }
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 data "aws_ami" "wordpress_ami" {
@@ -323,7 +343,7 @@ resource "aws_lambda_function" "wordpress_uptime" {
   architectures    = ["arm64"]
   filename         = data.archive_file.lambda_wordpress_uptime.output_path
   source_code_hash = data.archive_file.lambda_wordpress_uptime.output_base64sha256
-  depends_on = [aws_iam_role_policy_attachment.lambda_logs]
+  depends_on       = [aws_iam_role_policy_attachment.lambda_logs]
 }
 
 resource "aws_cloudwatch_event_rule" "wordpress_uptime" {
