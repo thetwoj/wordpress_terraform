@@ -28,6 +28,12 @@ provider "aws" {
   region  = "us-east-2"
 }
 
+provider "aws" {
+  alias   = "virginia"
+  profile = "personal"
+  region  = "us-east-1"
+}
+
 resource "aws_s3_bucket" "terraform_state" {
   bucket = "thetwoj-tfstate"
   acl    = "private"
@@ -55,6 +61,11 @@ data "aws_ami" "wordpress_ami" {
     name   = "tag:App"
     values = ["Wordpress"]
   }
+}
+
+data "aws_route53_zone" "thetwoj" {
+  name         = "thetwoj.com"
+  private_zone = false
 }
 
 resource "aws_instance" "wordpress_ec2" {
@@ -139,21 +150,11 @@ resource "aws_security_group" "wordpress_sg" {
   description = "Allow HTTP/S and SSH to Wordpress instance"
 
   ingress {
-    description      = "HTTPS"
-    from_port        = 443
-    to_port          = 443
-    protocol         = "tcp"
-    cidr_blocks      = ["0.0.0.0/0"]
-    ipv6_cidr_blocks = ["::/0"]
-  }
-
-  ingress {
-    description      = "HTTP"
+    description      = "HTTP from CloudFront"
     from_port        = 80
     to_port          = 80
     protocol         = "tcp"
-    cidr_blocks      = ["0.0.0.0/0"]
-    ipv6_cidr_blocks = ["::/0"]
+    prefix_list_ids  = ["pl-b6a144df"]  # AWS-maintained prefix list for CloudFront
   }
 
   ingress {
@@ -203,23 +204,11 @@ resource "aws_security_group" "wordpress_efs_sg" {
   }
 }
 
-resource "aws_eip" "wordpress_eip" {
-  vpc = true
-  tags = {
-    App = "Wordpress"
-  }
-}
-
 resource "aws_subnet" "us_east_2b_subnet" {
   vpc_id                  = aws_default_vpc.default.id
   availability_zone       = "us-east-2b"
   cidr_block              = "172.31.16.0/20"
   map_public_ip_on_launch = true
-}
-
-resource "aws_eip_association" "wordpress_eip_assoc" {
-  instance_id   = aws_instance.wordpress_ec2.id
-  allocation_id = aws_eip.wordpress_eip.id
 }
 
 resource "aws_default_vpc" "default" {
@@ -443,3 +432,104 @@ resource "aws_cloudwatch_metric_alarm" "wordpress_cpu_util" {
     Metric = "CPU"
   }
 }
+
+resource "aws_acm_certificate" "thetwoj_ssl_cert" {
+  domain_name       = "thetwoj.com"
+  validation_method = "DNS"
+  provider          = aws.virginia
+
+  tags = {
+    App = "Wordpress"
+  }
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "aws_route53_record" "thetwoj_validation" {
+  for_each = {
+    for dvo in aws_acm_certificate.thetwoj_ssl_cert.domain_validation_options : dvo.domain_name => {
+      name   = dvo.resource_record_name
+      record = dvo.resource_record_value
+      type   = dvo.resource_record_type
+    }
+  }
+
+  allow_overwrite = true
+  name            = each.value.name
+  records         = [each.value.record]
+  ttl             = 60
+  type            = each.value.type
+  zone_id         = data.aws_route53_zone.thetwoj.zone_id
+}
+
+resource "aws_acm_certificate_validation" "thetwoj" {
+  certificate_arn         = aws_acm_certificate.thetwoj_ssl_cert.arn
+  validation_record_fqdns = [for record in aws_route53_record.thetwoj_validation : record.fqdn]
+  provider                = aws.virginia
+}
+
+locals {
+  thetwoj_ec2_origin_id = "Wordpress EC2"
+}
+
+resource "aws_cloudfront_distribution" "thetwoj_distribution" {
+  origin {
+    domain_name = aws_instance.wordpress_ec2.public_dns
+    origin_id   = local.thetwoj_ec2_origin_id
+
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "http-only"
+      origin_ssl_protocols   = ["TLSv1", "TLSv1.1", "TLSv1.2"]
+    }
+  }
+
+  enabled         = true
+  is_ipv6_enabled = true
+  comment         = "Distribution for thetwoj.com"
+  aliases         = ["thetwoj.com"]
+
+  default_cache_behavior {
+    allowed_methods  = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+    cached_methods   = ["GET", "HEAD"]
+    target_origin_id = local.thetwoj_ec2_origin_id
+    cache_policy_id          = "658327ea-f89d-4fab-a63d-7e88639e58f6"
+    origin_request_policy_id = "216adef6-5c7f-47e4-b989-5492eafa07d3"
+
+    viewer_protocol_policy = "redirect-to-https"
+    compress = true
+  }
+
+  price_class = "PriceClass_100"
+
+  restrictions {
+    geo_restriction {
+      restriction_type = "none"
+    }
+  }
+
+  tags = {
+    App = "Wordpress"
+  }
+
+  viewer_certificate {
+    acm_certificate_arn      = aws_acm_certificate.thetwoj_ssl_cert.arn
+    ssl_support_method       = "sni-only"
+    minimum_protocol_version = "TLSv1.2_2021"
+  }
+}
+
+resource "aws_route53_record" "thetwoj" {
+  zone_id = data.aws_route53_zone.thetwoj.zone_id
+  name    = "thetwoj.com"
+  type    = "A"
+  alias {
+    name                   = aws_cloudfront_distribution.thetwoj_distribution.domain_name
+    zone_id                = aws_cloudfront_distribution.thetwoj_distribution.hosted_zone_id
+    evaluate_target_health = true
+  }
+}
+
