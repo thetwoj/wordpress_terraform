@@ -150,11 +150,11 @@ resource "aws_security_group" "wordpress_sg" {
   description = "Allow HTTP/S and SSH to Wordpress instance"
 
   ingress {
-    description      = "HTTP from CloudFront"
-    from_port        = 80
-    to_port          = 80
-    protocol         = "tcp"
-    prefix_list_ids  = ["pl-b6a144df"]  # AWS-maintained prefix list for CloudFront
+    description     = "HTTP from CloudFront"
+    from_port       = 80
+    to_port         = 80
+    protocol        = "tcp"
+    prefix_list_ids = ["pl-b6a144df"] # AWS-maintained prefix list for CloudFront
   }
 
   ingress {
@@ -493,14 +493,57 @@ resource "aws_cloudfront_distribution" "thetwoj_distribution" {
   aliases         = ["thetwoj.com"]
 
   default_cache_behavior {
-    allowed_methods  = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
-    cached_methods   = ["GET", "HEAD"]
-    target_origin_id = local.thetwoj_ec2_origin_id
+    allowed_methods          = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+    cached_methods           = ["GET", "HEAD"]
+    target_origin_id         = local.thetwoj_ec2_origin_id
+    compress                 = true
     cache_policy_id          = "658327ea-f89d-4fab-a63d-7e88639e58f6"
     origin_request_policy_id = "216adef6-5c7f-47e4-b989-5492eafa07d3"
+    viewer_protocol_policy   = "redirect-to-https"
+  }
 
-    viewer_protocol_policy = "redirect-to-https"
-    compress = true
+  ordered_cache_behavior {
+    path_pattern             = "/wp-content/*"
+    allowed_methods          = ["GET", "HEAD"]
+    cached_methods           = ["GET", "HEAD"]
+    target_origin_id         = local.thetwoj_ec2_origin_id
+    compress                 = true
+    cache_policy_id          = "658327ea-f89d-4fab-a63d-7e88639e58f6"
+    origin_request_policy_id = "216adef6-5c7f-47e4-b989-5492eafa07d3"
+    viewer_protocol_policy   = "redirect-to-https"
+  }
+
+  ordered_cache_behavior {
+    path_pattern             = "/wp-includes/*"
+    allowed_methods          = ["GET", "HEAD"]
+    cached_methods           = ["GET", "HEAD"]
+    target_origin_id         = local.thetwoj_ec2_origin_id
+    compress                 = true
+    cache_policy_id          = "658327ea-f89d-4fab-a63d-7e88639e58f6"
+    origin_request_policy_id = "216adef6-5c7f-47e4-b989-5492eafa07d3"
+    viewer_protocol_policy   = "redirect-to-https"
+  }
+
+  ordered_cache_behavior {
+    path_pattern             = "/wp-admin/*"
+    allowed_methods          = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+    cached_methods           = ["GET", "HEAD"]
+    target_origin_id         = local.thetwoj_ec2_origin_id
+    compress                 = true
+    cache_policy_id          = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad" # Don't cache
+    origin_request_policy_id = "216adef6-5c7f-47e4-b989-5492eafa07d3"
+    viewer_protocol_policy   = "redirect-to-https"
+  }
+
+  ordered_cache_behavior {
+    path_pattern             = "/wp-login.php"
+    allowed_methods          = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+    cached_methods           = ["GET", "HEAD"]
+    target_origin_id         = local.thetwoj_ec2_origin_id
+    compress                 = true
+    cache_policy_id          = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad" # Don't cache
+    origin_request_policy_id = "216adef6-5c7f-47e4-b989-5492eafa07d3"
+    viewer_protocol_policy   = "redirect-to-https"
   }
 
   price_class = "PriceClass_100"
