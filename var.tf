@@ -1,7 +1,7 @@
 variable "wordpress_instance_type" {
   description = "Instance type for Wordpress EC2 instance"
   type        = string
-  default     = "t2.micro"
+  default     = "t3a.small"
 }
 
 variable "wordpress_ami_regex" {

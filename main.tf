@@ -68,7 +68,7 @@ data "aws_route53_zone" "thetwoj" {
   private_zone = false
 }
 
-resource "aws_instance" "wordpress_ec2" {
+resource "aws_spot_instance_request" "wordpress_ec2" {
   ami                    = data.aws_ami.wordpress_ami.id
   instance_type          = var.wordpress_instance_type
   availability_zone      = "us-east-2b"
@@ -76,6 +76,7 @@ resource "aws_instance" "wordpress_ec2" {
   iam_instance_profile   = aws_iam_instance_profile.wordpress_instance_profile.name
   hibernation            = false
   user_data              = data.template_file.userdata_script.rendered
+  wait_for_fulfillment = true
 
   root_block_device {
     delete_on_termination = true
@@ -97,7 +98,7 @@ resource "aws_instance" "wordpress_ec2" {
 data "template_file" "userdata_script" {
   template = file("userdata_script.tpl")
   vars = {
-    ebs_device = "/dev/xvdf"
+    ebs_device = "/dev/sdf"
     ebs_path   = "/ebs"
     efs_id     = aws_efs_file_system.wordpress_content.id
     efs_path   = "/var/www/html/efs"
@@ -119,7 +120,7 @@ resource "aws_ebs_volume" "wordpress_db_volume" {
 resource "aws_volume_attachment" "wordpress_db_volume_attachment" {
   device_name                    = "/dev/sdf"
   volume_id                      = aws_ebs_volume.wordpress_db_volume.id
-  instance_id                    = aws_instance.wordpress_ec2.id
+  instance_id                    = aws_spot_instance_request.wordpress_ec2.spot_instance_id
   stop_instance_before_detaching = true
 }
 
@@ -391,7 +392,7 @@ resource "aws_cloudwatch_metric_alarm" "wordpress_memory_use" {
   insufficient_data_actions = []
   dimensions = {
     "ImageId"      = data.aws_ami.wordpress_ami.id
-    "InstanceId"   = aws_instance.wordpress_ec2.id
+    "InstanceId"   = aws_spot_instance_request.wordpress_ec2.spot_instance_id
     "InstanceType" = var.wordpress_instance_type
   }
   alarm_actions = [
@@ -419,7 +420,7 @@ resource "aws_cloudwatch_metric_alarm" "wordpress_cpu_util" {
   alarm_description         = "Excessive CPU util on Wordpress instance"
   insufficient_data_actions = []
   dimensions = {
-    "InstanceId" = aws_instance.wordpress_ec2.id
+    "InstanceId" = aws_spot_instance_request.wordpress_ec2.spot_instance_id
   }
   alarm_actions = [
     aws_sns_topic.wordpress_alarm_topic.arn,
@@ -476,7 +477,7 @@ locals {
 
 resource "aws_cloudfront_distribution" "thetwoj_distribution" {
   origin {
-    domain_name = aws_instance.wordpress_ec2.public_dns
+    domain_name = aws_spot_instance_request.wordpress_ec2.public_dns
     origin_id   = local.thetwoj_ec2_origin_id
 
     custom_origin_config {
