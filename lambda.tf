@@ -2,7 +2,7 @@ data "archive_file" "lambda_wordpress_uptime" {
   type        = "zip"
   output_path = "/tmp/lambda_wordpress_uptime.zip"
   source {
-    content  = file("./lambda_wordpress_uptime.py")
+    content  = file("./files/lambda_wordpress_uptime.py")
     filename = "lambda_wordpress_uptime.py"
   }
 }

@@ -42,7 +42,7 @@ resource "aws_spot_instance_request" "wordpress_ec2" {
 }
 
 data "template_file" "userdata_script" {
-  template = file("userdata_script.tpl")
+  template = file("./files/userdata_script.tpl")
   vars = {
     ebs_device = "/dev/sdf"
     ebs_path   = "/ebs"
