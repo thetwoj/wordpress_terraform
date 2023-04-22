@@ -63,13 +63,6 @@ resource "aws_ebs_volume" "wordpress_db_volume" {
   }
 }
 
-resource "aws_volume_attachment" "wordpress_db_volume_attachment" {
-  device_name                    = "/dev/sdf"
-  volume_id                      = aws_ebs_volume.wordpress_db_volume.id
-  instance_id                    = aws_spot_instance_request.wordpress_ec2.spot_instance_id
-  stop_instance_before_detaching = true
-}
-
 resource "aws_efs_file_system" "wordpress_content" {
   encrypted = true
 
