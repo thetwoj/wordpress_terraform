@@ -27,10 +27,6 @@ resource "aws_spot_instance_request" "wordpress_ec2" {
   root_block_device {
     delete_on_termination = true
     encrypted             = true
-    tags = {
-      App = "Wordpress"
-      Use = "Root"
-    }
     volume_size = 8
     volume_type = "gp3"
   }
