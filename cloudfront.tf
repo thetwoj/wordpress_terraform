@@ -74,6 +74,18 @@ resource "aws_cloudfront_distribution" "thetwoj_distribution" {
     viewer_protocol_policy   = "redirect-to-https"
   }
 
+  ordered_cache_behavior {
+    path_pattern             = "/healthcheck"
+    allowed_methods          = ["GET", "HEAD", "OPTIONS"]
+    cached_methods           = ["GET", "HEAD"]
+    target_origin_id         = local.thetwoj_ec2_origin_id
+    compress                 = true
+    cache_policy_id          = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad" # Don't cache
+    origin_request_policy_id = "216adef6-5c7f-47e4-b989-5492eafa07d3"
+    viewer_protocol_policy   = "redirect-to-https"
+  }
+
+
   price_class = "PriceClass_100"
 
   restrictions {
