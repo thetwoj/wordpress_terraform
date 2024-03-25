@@ -46,13 +46,13 @@ resource "aws_iam_policy" "ec2_userdata_policy" {
         ],
         Resource: [
           "arn:aws:ec2:us-east-2:259249389453:instance/*",
-          "arn:aws:ec2:us-east-2:259249389453:volume/vol-0ce4bc29e315a9bb6",
+          "arn:aws:ec2:us-east-2:259249389453:volume/vol-03f6fbbdf2945fa1c",
         ],
       },
       {
         Effect: "Allow",
         Action: "ec2:DescribeVolumes",
-        Resource: "arn:aws:ec2:us-east-2:259249389453:volume/vol-0ce4bc29e315a9bb6"
+        Resource: "arn:aws:ec2:us-east-2:259249389453:volume/vol-03f6fbbdf2945fa1c"
       },
       {
         Effect: "Allow",

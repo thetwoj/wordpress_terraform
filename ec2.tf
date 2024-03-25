@@ -17,7 +17,7 @@ data "aws_ami" "wordpress_ami" {
 resource "aws_spot_instance_request" "wordpress_ec2" {
   ami                    = data.aws_ami.wordpress_ami.id
   instance_type          = var.wordpress_instance_type
-  availability_zone      = "us-east-2b"
+  availability_zone      = "us-east-2c"
   vpc_security_group_ids = [aws_security_group.wordpress_sg.id]
   iam_instance_profile   = aws_iam_instance_profile.wordpress_instance_profile.name
   hibernation            = false
@@ -48,7 +48,7 @@ data "template_file" "userdata_script" {
 }
 
 resource "aws_ebs_volume" "wordpress_db_volume" {
-  availability_zone = "us-east-2b"
+  availability_zone = "us-east-2c"
   encrypted         = true
   size              = 22
   type              = "gp3"
@@ -78,5 +78,5 @@ resource "aws_efs_file_system" "wordpress_content" {
 resource "aws_efs_mount_target" "wordpress_content" {
   file_system_id  = aws_efs_file_system.wordpress_content.id
   security_groups = [aws_security_group.wordpress_efs_sg.id]
-  subnet_id       = aws_subnet.us_east_2b_subnet.id
+  subnet_id       = aws_subnet.us_east_2c_subnet.id
 }
