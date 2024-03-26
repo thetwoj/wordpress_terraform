@@ -39,28 +39,35 @@ resource "aws_iam_policy" "ec2_userdata_policy" {
     Version = "2012-10-17",
     Statement = [
       {
-        Effect: "Allow",
-        Action: [
+        Effect : "Allow",
+        Action : [
           "ec2:AttachVolume",
           "ec2:DetachVolume",
         ],
-        Resource: [
+        Resource : [
           "arn:aws:ec2:us-east-2:259249389453:instance/*",
-          "arn:aws:ec2:us-east-2:259249389453:volume/vol-03f6fbbdf2945fa1c",
+          "arn:aws:ec2:us-east-2:259249389453:volume/${aws_ebs_volume.wordpress_db_volume.id}",
         ],
       },
       {
-        Effect: "Allow",
-        Action: "ec2:DescribeVolumes",
-        Resource: "arn:aws:ec2:us-east-2:259249389453:volume/vol-03f6fbbdf2945fa1c"
+        Effect : "Allow",
+        Action : "ec2:DescribeVolumes",
+        Resource : "arn:aws:ec2:us-east-2:259249389453:volume/${aws_ebs_volume.wordpress_db_volume.id}"
       },
       {
-        Effect: "Allow",
-        Action: [
+        Effect : "Allow",
+        Action : [
           "cloudfront:GetDistribution",
           "cloudfront:UpdateDistribution",
         ],
-        Resource: "arn:aws:cloudfront::259249389453:distribution/E3LAHTKSLN65G9"
+        Resource : "arn:aws:cloudfront::259249389453:distribution/E3LAHTKSLN65G9"
+      },
+      {
+        Effect : "Allow",
+        Action : [
+          "cloudwatch:PutMetricAlarm",
+        ],
+        Resource : "*"
       }
     ]
   })

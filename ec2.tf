@@ -22,13 +22,13 @@ resource "aws_spot_instance_request" "wordpress_ec2" {
   iam_instance_profile   = aws_iam_instance_profile.wordpress_instance_profile.name
   hibernation            = false
   user_data              = data.template_file.userdata_script.rendered
-  wait_for_fulfillment = true
+  wait_for_fulfillment   = true
 
   root_block_device {
     delete_on_termination = true
     encrypted             = true
-    volume_size = 8
-    volume_type = "gp3"
+    volume_size           = 8
+    volume_type           = "gp3"
   }
 
   tags = {
@@ -40,10 +40,14 @@ resource "aws_spot_instance_request" "wordpress_ec2" {
 data "template_file" "userdata_script" {
   template = file("./files/userdata_script.tpl")
   vars = {
-    ebs_device = "/dev/sdf"
-    ebs_path   = "/ebs"
-    efs_id     = aws_efs_file_system.wordpress_content.id
-    efs_path   = "/var/www/html/efs"
+    ebs_device      = "/dev/sdf"
+    ebs_path        = "/ebs"
+    efs_id          = aws_efs_file_system.wordpress_content.id
+    efs_path        = "/var/www/html/efs"
+    ami_image       = data.aws_ami.wordpress_ami.id
+    instance_type   = var.wordpress_instance_type
+    sns_alarm_topic = aws_sns_topic.wordpress_alarm_topic.arn
+    ebs_id          = aws_ebs_volume.wordpress_db_volume.id
   }
 }
 
